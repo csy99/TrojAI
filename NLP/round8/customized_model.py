@@ -10,7 +10,6 @@ import numpy as np
 from random import randint
 from enum import Enum
 import time
-# import chop
 
 import torch
 from torch.functional import Tensor
@@ -26,11 +25,12 @@ from torch.cuda.amp import autocast
 from typing import Dict, List
 
 from filepaths import TRAINING_FILEPATH, CLEAN_TRAIN_MODELS_FILEPATH, CLEAN_TEST_MODELS_FILEPATH
-from myRoberta import *
+# from myRoberta import *
 
 
 ''' CONSTANTS '''
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# DEVICE = torch.device('cpu')
 CPU = torch.device('cpu')
 EXTRACTED_GRADS = {'eval':[], 'clean':[]}
 
@@ -45,6 +45,7 @@ class Mode(Enum):
     # VAL   = 2
     TEST  = 3
 
+# @torch.jit.script
 class WrapperModel(torch.nn.Module):
     ## model_val is a list of testing model (size == 3)
     def __init__(self, mode=Mode.TRAIN, 
@@ -241,10 +242,8 @@ def trojan_detector(args):
             state_dict = classification_model.state_dict()
             if "roberta-base-squad2" in config['model_architecture'].split('/')[-1]:
                 print("model file path is", model_filepath)
-                # classification_model = RobertaForQuestionAnswering.from_pretrained(model_filepath, config=config, state_dict=state_dict)
-                classification_model = RobertaForQuestionAnswering.from_pretrained(None, config=classification_model.config, state_dict=state_dict)
-                # classification_model.load_state_dict(state_dict)
-                # classification_model = torch.load("/home/ubuntu/TrojAI/NLP/round8/myRoberta.py", map_location=DEVICE)
+                classification_model = transformers.RobertaForQuestionAnswering.from_pretrained(None, 
+                    config=classification_model.config, state_dict=state_dict, torchscript=True)
             else:
                 classification_model = torch.load(model_filepath, map_location=DEVICE)
             classification_model.eval()
@@ -674,7 +673,7 @@ def trojan_detector(args):
                 old_trigger = deepcopy(new_trigger)
                 # old_loss = compute_loss(models, triggered_dataset, args.batch_size, with_gradient=True)
                 model1 = torch.jit.script(WrapperModel(Mode.TRAIN, 
-                    model_train=models['clean_train'][0], model_test=models['eval']))
+                    model_train=models['clean_train'][0], model_test=models['eval'][0]))
                 old_loss = model1.forward(args, triggered_dataset, with_gradient=True, populate_baselines=True)
 
                 @torch.no_grad()
